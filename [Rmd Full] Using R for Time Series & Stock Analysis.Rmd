@@ -1,0 +1,508 @@
+---
+title: "Using R for Time Series & Stock Analysis"
+author: "Aurellia Christie"
+date: "5/9/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen=9999)
+```
+
+
+## Libraries & Set up
+```{r}
+#Sebelum run chunk ini silakan menghilangkan tanda "#" di sebelum kata install
+#install.packages(c("xts","forecast","quantmod","highcharter","PerformanceAnalytics"))
+library(xts)
+library(forecast)
+library(quantmod)
+library(highcharter)
+library(PerformanceAnalytics)
+```
+
+## Introduction to Time Series Data
+
+#### 1. Contoh Time Series Data (Built-in Data dalam R)
+
+```{r}
+#AirPassengers Data : data bulanan penumpang US Airlines tahun 1949-1960
+AirPassengers
+```
+```{r}
+class(AirPassengers)
+```
+
+
+```{r}
+#Nile Data : data tahunan volume sungai Nil (dalam 10^8 m^3) tahun 1871-1970
+Nile
+```
+
+#### 2. Membuat Objek Time-Series di R 
+
+```{r}
+data<-c(5,10,12,31,55,63,41,50,49,30,8,20)
+class(data)
+data
+```
+
+```{r}
+#Mengubah variabel data menjadi data tahunan dimulai pada bulan Januari 2000
+data_ts<-ts(data,start=c(2000,1),frequency=1)
+class(data_ts)
+data_ts
+```
+
+Jika ternyata data yang kita miliki bulanan kita harus melakukan resampling dengan mengubah `frequency`
+
+Ingat bahwa `frequency`: jumlah periode dalam 1 tahun.
+
+Silakan mencoba melakukan beberapa resampling (mengubah `frequency` data) untuk lebih memahaminya.
+
+```{r}
+#Tuliskan code anda di bawah sini (tidak perlu menyimpan percobaan anda ke dalam variabel)
+ts(data,start=c(2000,1),frequency=4)
+```
+
+
+Selain `ts()`, terdapat pula package `xts` yang dapat digunakan untuk membuat objek time-series.
+
+```{r}
+dates<-seq(as.Date("2000-01-01"),length=12,by="months")
+data_ts2<-xts(x=data,order.by = dates)
+data_ts2
+```
+
+Pada package `xts` kita dapat memanggil komponen data
+
+```{r}
+start(data_ts2)
+```
+```{r}
+end(data_ts2)
+```
+```{r}
+time(data_ts2)
+```
+
+Berbeda dengan `ts()`, `xts` menggunakan `by` untuk mendefinisikan periodenya. Silakan mencoba mengubahnya menjadi days / years / lainnya untuk melihat perbedaannya
+
+```{r}
+#Tulisakan code anda di bawah sini
+dates<-seq(as.Date("2000-01-01"),length=12,by="quarters")
+data_ts2<-xts(x=data,order.by = dates)
+data_ts2
+```
+
+Untuk penjelasan lebih lanjut mengenai package `xts` dapat dibaca pada link berikut : https://www.datacamp.com/community/blog/r-xts-cheat-sheet 
+
+
+Mari mencoba menggunakan fungsi `ts()` untuk mengubah dataset yang kita miliki (Monthly Sale.csv) menjadi objek time-series 
+
+```{r}
+sale<-read.csv("Monthly Sale.csv")
+head(sale)
+```
+
+Untuk tujuan pembelajaran hari ini, kita hanya akan menggunakan data Sales_quantity
+
+```{r}
+#Ambil data Sales_quantity saja
+sale<-sale[,3]
+```
+
+```{r}
+#Ubah variabel sale menjadi objek time-series 
+sale_ts<-ts(sale,start=c(2015,1),frequency=12)
+sale_ts
+```
+
+
+Selanjutnya, kita juga dapat mengambil sebagian data dari data time-series yang kita miliki (subset) menggunakan `window()`
+
+```{r}
+#Misal : kita hanya ingin melihat jumlah penumpang US Airlines pada tahun 1950-1954
+window(AirPassengers,start=c(1950,1),end=c(1954,12))
+```
+
+Bagaimana jika kita hanya ingin melihat jumlah penjualan pada variabel `sale_ts` di tahun 2017-2019 saja?
+
+```{r}
+#Tuliskan code anda di bawah sini
+window(sale_ts,start=c(2017,1),end=c(2019,12))
+```
+
+Setelah berhasil membuat & mengambil subset dari data time-series, kita akan mencoba untuk memvisualisasikan data kita. 
+
+#### 3. Visualisasi Data Time-Series
+
+```{r}
+#Membuat plot dari data AirPassengers
+plot(AirPassengers,col="blue",main="Jumlah Penumpang US Airlines Tahun 1949-1960",xlab="Tahun",ylab="Jumlah penumpang")
+```
+
+Perhatikan bahwa pada saat data time-series kita plot, waktu akan terletak pada sumbu x sedangkan data observasi akan terletak pada sumbu y. Melihat plot di atas, apakah pattern dari data tersebut?
+
+Mari kita bandingkan plot data time-series dan data biasa
+
+```{r}
+#Plot dari variabel sale yang kita miliki
+plot(sale, main="Data Biasa")
+```
+
+```{r}
+#Tuliskan code untuk membuat plot dari variabel sale_ts yang kita miliki (beri judul "Data Time Series")
+plot(sale_ts, main="Data Time Series")
+```
+
+Jadi, apa perbedaannya? 
+
+
+## Forecasting Time-Series Data
+
+Mulai dari section ini kita hanya akan menggunakan data `sale_ts`
+
+#### 1. Membagi data menjadi training & testing data
+
+```{r}
+#Berapa periode yang ingin diforecast?
+n<-12
+
+#Bagi data menjadi training & testing
+train_sale<-head(sale_ts,length(sale_ts)-n)
+test_sale<-tail(sale_ts,n)
+```
+
+#### 2. Forecast menggunakan Naive Method
+
+```{r}
+fc_na<-naive(train_sale,h=n)
+```
+
+```{r}
+#Plot hasil forecast
+autoplot(fc_na) +
+  autolayer(test_sale, series = "Test Data")
+```
+
+Setelah melakukan forecast menggunakan naive method, mari kita cek residual dan akurasinya.
+
+```{r}
+#Cek residual
+checkresiduals(fc_na)
+```
+
+Apakah asumsi residual dari model tersebut terpenuhi?
+
+```{r}
+#Cek akurasi 
+accuracy(fc_na,test_sale)
+```
+
+
+### 3. Forecast using ARIMA Model
+
+Syarat data untuk auto.arima : dapat diubah menjadi data yang stasioner
+
+```{r}
+#Plot data train_sale
+plot(train_sale)
+```
+
+Apakah data sudah stasioner?
+
+Jika belum, coba lakukan differencing pada data & plot kembali 
+
+```{r}
+#Tuliskan code anda di bawah sini
+plot(diff(train_sale))
+```
+
+Apakah data menjadi stasioner?
+
+```{r}
+#Membuat model arima dari data
+model_ar<-auto.arima(train_sale,seasonal = FALSE)
+model_ar
+```
+Untuk pembelajaran hari ini kita akan mengabaikan unsur seasonal terlebih dahulu.
+
+Jika ingin lebih memahami tentang Seasonal ARIMA (SARIMA) anda dapat membacanya pada link berikut : https://otexts.com/fpp2/seasonal-arima.html
+
+```{r}
+#Tuliskan code untuk melakukan forecast data menggunakan model_ar & simpan ke dalam variabel fc_ar di bawah sini
+fc_ar<-forecast(model_ar,h=n)
+fc_ar
+```
+
+```{r}
+#Tuliskan code plot hasil forecast menggunakan autoplot dan autolayer di bawah sini
+autoplot(fc_ar) +
+  autolayer(test_sale, series = "Test Data")
+```
+
+
+Selanjutnya cek residual & keakurasian model
+
+```{r}
+#Tuliskan code untuk mengecek residual dari model_ar di bawah sini
+checkresiduals(model_ar)
+```
+
+```{r}
+#Tuliskan code untuk mengecek keakurasian hasil forecast di bawah sini
+accuracy(fc_ar,test_sale)
+```
+
+```{r}
+#Tuliskan kembali code untuk mengecek keakurasian hasil forecast menggunakan naive method di sini
+accuracy(fc_na,test_sale)
+```
+
+Berdasarkan perbandingan tes akurasi, manakah model yang lebih baik?
+
+
+## Stock Data Analysis
+
+#### 1. Mengambil data stock menggunakan package `quantmod`
+
+Hari ini kita akan mencoba menganalisis saham Bank BRI (BBRI.JK) tahun 2014-2019
+
+Ingat bahwa source yang digunakan adalah Yahoo Finance. Untuk melihat ticker dari saham yang diinginkan dapat dicek di link berikut: https://finance.yahoo.com/
+
+```{r}
+#Mengambil data
+price_bbri<-getSymbols("BBRI.JK",auto.assign=FALSE,from="2017-01-01",to="2019-12-31")
+head(price_bbri)
+```
+
+Data yang akan kita gunakan untuk analisis selanjutnya adalah data harga penutupan yang dapat diambil dengan menggunakan fungsi `Cl()`
+
+#### 2. Visualisasi Data Harga Saham
+
+```{r}
+#Plot Biasa
+plot(Cl(price_bbri),main="Harga Penutupan Saham BRI tahun 2017-2019")
+```
+
+Selanjutnya kita akan mencoba membuat plot yang lebih interaktif. Chart yang paling umum digunakan saat menganalisis harga saham : Candle Stick Chart. Maka kita akan coba untuk membuat chart tersebut.
+
+```{r}
+#Menggunakan package highcharter
+highchart(type="stock") %>% 
+  hc_add_series(price_bbri)
+```
+
+Candle stick yang berwarna biru berarti harga pembukaan (Opening price) **>** harga penutupan (Closing price)
+
+Sedangkan candle stick yang berwarna putih berarti sebaliknya. 
+
+Berikut adalah referensi untuk lebih memahami candle stick chart : https://www.investopedia.com/trading/candlestick-charting-what-is-it/
+
+Indikator lain yang sangat sering dilihat pada grafik harga saham adalah Single Moving Average (forecast berdasarkan rata-rata n periode sebelumnya). Dengan menggunakan highcharter, kita dapat menambahkan indikator tersebut ke dalam grafik dengan sangat mudah
+
+```{r}
+highchart(type="stock") %>% 
+  hc_add_series(price_bbri) %>% 
+  hc_add_series(SMA(Cl(price_bbri),n=50),name="SMA(50)") %>% 
+  hc_add_series(SMA(Cl(price_bbri),n=200),name="SMA(200)") %>% 
+  hc_title(text="<b>BBRI Price Candle Stick Chart 2017-2019</b>")
+```
+
+Golden cross : Saat SMA dengan n yang lebih kecil (Misal SMA(50)) bersilangan dengan SMA dengan n yang lebih besar (Misal SMA(200)) dalam keadaan trend nya meningkat -> Saat yang baik untuk membeli saham
+
+Death cross : Saat SMA dengan n yang lebih kecil (Misal SMA(50)) bersilangan dengan SMA dengan n yang lebih besar (Misal SMA(200)) dalam keadaan trend nya menurun -> Saatnya untuk menjual saham
+
+Berikut adalah referensi untuk lebih memahami golden & death cross : https://www.investopedia.com/ask/answers/121114/what-difference-between-golden-cross-and-death-cross-pattern.asp
+
+
+Silakan mencoba membuat candle stick chart dari BBRI lalu tambahkan indikator SMA(10) dan SMA(50)
+
+```{r}
+#Tuliskan code anda di sini
+highchart(type="stock") %>% 
+  hc_add_series(price_bbri) %>% 
+  hc_add_series(SMA(Cl(price_bbri),n=10),name="SMA(10)") %>% 
+  hc_add_series(SMA(Cl(price_bbri),n=50),name="SMA(50)") %>% 
+  hc_title(text="<b>BBRI Price Candle Stick Chart 2017-2019</b>")
+```
+
+Apakah anda dapat menunjukkan di mana letak golden cross dan death cross?
+
+#### 3. Stock Data Analysis
+
+Sebelum melakukan forecast harga saham, kita akan melakukan beberapa analisis terlebih dahulu. 
+
+Yang pertama adalah menghitung daily return dari saham BBRI pada tahun 2017-2019
+
+```{r}
+#Menghitung daily return dari saham BBRI
+return<-dailyReturn(Cl(price_bbri))
+summary(return)
+```
+
+```{r}
+#Membuat plot dari daily return BBRI
+plot(return,main="Daily Return BBRI tahun 2017-2019")
+```
+
+Kita juga dapat membuat chart dari return yang kita miliki menggunakan package `PerformanceAnalytics`
+
+```{r}
+charts.PerformanceSummary(return,main="Daily Return BBRI tahun 2017-2019")
+```
+
+Jika anda menginginkan return mingguan / bulanan dari BBRI silakan mengubah function `dailyReturn` menjadi `weeklyReturn` / `monthlyReturn`
+
+```{r}
+#Tuliskan code anda di bawah sini 
+a<-weeklyReturn(Cl(price_bbri))
+summary(a)
+```
+
+
+Selanjutnya, kita ingin mencoba membandingkan harga saham & return BBRI dengan BBNI dan juga BMRI
+
+```{r}
+#Tuliskan code untuk mengambil data harga saham BBNI dan BMRI dari 1 Januari 2017 hingga 31 Desember 2019 di sini (simpan kedua data ke dalam variabel price_bbni dan price_bmri)
+price_bbni<-getSymbols("BBNI.JK",auto.assign=FALSE,from="2017-01-01",to="2019-12-31")
+price_bmri<-getSymbols("BMRI.JK",auto.assign=FALSE,from="2017-01-01",to="2019-12-31")
+
+#Plot dari ketiga harga saham
+highchart(type="stock") %>% 
+  hc_add_series(Cl(price_bbri),name="BBRI") %>% 
+  hc_add_series(Cl(price_bbni),name="BBNI") %>% 
+  hc_add_series(Cl(price_bmri),name="BMRI") %>% 
+  hc_title(text="<b>BBRI vs BBNI vs BMRI Closing Price</b>")
+```
+
+Bagaimanakah harga saham BBRI dibandingkan harga saham BBNI dan BMRI?
+
+```{r}
+#Tuliskan code untuk menghitung daily return BBNI dan BMRI di sini (simpan kedua data ke dalam variabel return_bbni dan return_bmri)
+return_bbni<-dailyReturn(Cl(price_bbni))
+return_bmri<-dailyReturn(Cl(price_bmri))
+
+#Menyatukan ketiga data return ke dalam satu data frame
+returns<-data.frame(return,return_bbni,return_bmri)
+names(returns)<-c("return_bbri","return_bbni","return_bmri")
+returns<-as.xts(returns)
+
+#Membuat plot dari return ketiga bank tersebut
+charts.PerformanceSummary(returns,main="Daily Return BBRI vs BBNI vs BMRI 2017-2019")
+```
+
+Bagaimanakah daily return BBRI jika dibandingkan kedua saham lainnya?
+
+#### 4. Forecasting Stock Price
+
+Kembali menggunakan harga penutupan saham BBRI, pertama-tama kita membagi data menjadi training & testing
+
+```{r}
+#Berapa periode yang ingin diforecast? Perhatikan kembali dalam kasus ini periode apa yang digunakan!
+n_1<-100
+
+#Tuliskan code untuk membagi data menjadi training & testing di bawah sini (simpan keduanya ke dalam variabel train_price dan test_price)
+train_price<-head(Cl(price_bbri),length(Cl(price_bbri))-n_1)
+test_price<-tail(Cl(price_bbri),n_1)
+```
+
+
+**Forecast menggunakan Naive Method**
+
+```{r}
+#Tuliskan code untuk melakukan forecast n_1 periode menggunakan Naive Method di sini (simpan ke dalam variabel fc_na_1)
+fc_na_1<-naive(train_price,h=n_1)
+
+#Membuat plot hasil forecast (data test_price harus diubah terlebih dahulu menjadi format ts karena autolayer tidak dapat digunakan untuk data dengan format xts)
+autoplot(fc_na_1) +
+  autolayer(ts(test_price,start=length(train_price)), series = "Test Data")
+```
+
+Cek residual & akurasi dari hasil forecast tersebut
+
+```{r}
+#Tuliskan code untuk cek residual di sini
+checkresiduals(fc_na_1)
+```
+
+Apakah asumsi residual dari model tersebut terpenuhi?
+
+```{r}
+#Tuliskan code untuk cek akurasi di sini
+accuracy(fc_na_1,test_price)
+```
+
+
+**Forecast menggunakan ARIMA**
+
+Cek kestasioneran data
+
+```{r}
+plot(train_price)
+```
+
+Apakah data stasioner? Jika tidak, coba cek apakah data menjadi stasioner jika di-differencing?
+
+```{r}
+#Tuliskan code untuk membuat plot dari hasil differencing data train_price
+plot(diff(train_price))
+```
+
+
+Jika sudah dipastikan data dapat menjadi stasioner, barulah kita membuat model ARIMA 
+
+```{r}
+#Tuliskan code untuk membuat model ARIMA di sini (simpan ke dalam variabel model_ar_1)
+model_ar_1<-auto.arima(train_price,seasonal=FALSE)
+model_ar_1
+```
+
+```{r}
+#Forecast
+fc_ar_1<-forecast(model_ar_1,h=n_1)
+
+#Tuliskan code untuk membuat plot dari forecast ARIMA tersebut menggunakan function autoplot + autolayer di sini. 
+#Ingat bahwa autolayer tidak mensupport data dengan format xts
+autoplot(fc_ar_1)+
+  autolayer(ts(test_price,start=length(train_price)),series="Test Data")
+```
+
+Selanjutnya cek residual dan keakurasian model
+
+```{r}
+#Tuliskan code untuk mengecek residual di sini
+checkresiduals(model_ar_1)
+```
+
+Apakah asumsi residual dari model tersebut terpenuhi?
+
+```{r}
+#Tuliskan code untuk mengecek keakurasian di sini
+accuracy(fc_ar_1,test_price)
+```
+
+```{r}
+#Tuliskan kembali code untuk mengecek keakurasian hasil forecast menggunakan naive method di sini
+accuracy(fc_na_1,test_price)
+```
+
+Untuk forecast harga BBRI, menurut Anda metode mana yang lebih baik?
+
+
+## References
+
+Supertype & Algoritma Learning Materials 
+
+Data Monthly Sale : https://www.kaggle.com/podsyp/time-series-starter-dataset (dimodifikasi sedikit untuk tujuan pembelajaran hari ini)
+
+https://www.aptech.com/blog/introduction-to-the-fundamentals-of-time-series-data-and-analysis/
+
+https://www.econometrics-with-r.org/14-ittsraf.html
+
+
+

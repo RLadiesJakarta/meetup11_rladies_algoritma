@@ -59,6 +59,7 @@ Ingat bahwa `frequency`: jumlah periode dalam 1 tahun.
 Silakan mencoba melakukan beberapa resampling (mengubah `frequency` data) untuk lebih memahaminya.
 ```{r}
 #Tuliskan code anda di bawah sini (tidak perlu menyimpan percobaan anda ke dalam variabel)
+ts(data,start=c(2000,1),frequency=12)
 ```
 
 
@@ -117,6 +118,7 @@ window(AirPassengers,start=c(1950,1),end=c(1954,12))
 Bagaimana jika kita hanya ingin melihat jumlah penjualan pada variabel `sale_ts` di tahun 2017-2019 saja?
 ```{r}
 #Tuliskan code anda di bawah sini
+window(sale_ts,start=c(2017,1),end=c(2019,12))
 ```
 
 Setelah berhasil membuat & mengambil subset dari data time-series, kita akan mencoba untuk memvisualisasikan data kita. 
@@ -137,6 +139,7 @@ plot(sale, main="Data Biasa")
 
 ```{r}
 #Tuliskan code untuk membuat plot dari variabel sale_ts yang kita miliki (beri judul "Data Time Series")
+plot(sale_ts, main="Data Time Series")
 ```
 
 Jadi, apa perbedaannya? 
@@ -159,6 +162,7 @@ test_sale<-tail(sale_ts,n)
 #### 2. Forecast menggunakan Naive Method
 ```{r}
 fc_na<-naive(train_sale,h=n)
+fc_na
 ```
 
 ```{r}
@@ -375,7 +379,7 @@ autoplot(fc_na_1) +
 Cek residual & akurasi dari hasil forecast tersebut
 ```{r}
 #Tuliskan code untuk cek residual di sini
-
+checkresiduals(c)
 ```
 
 Apakah asumsi residual dari model tersebut terpenuhi?
